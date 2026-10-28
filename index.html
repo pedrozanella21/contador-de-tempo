@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contador de Tempo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #f8fafc;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+    header { text-align: center; margin-bottom: 28px; }
+    header h1 { font-size: 1.6rem; }
+    header p { color: #94a3b8; margin-top: 6px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 28px 22px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+    }
+    .badge {
+      display: inline-block;
+      background: #f59e0b;
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 5px 14px;
+      border-radius: 50px;
+      margin-bottom: 14px;
+    }
+    .days { font-size: 3.5rem; font-weight: 800; color: #38bdf8; line-height: 1; }
+    .unit { text-transform: uppercase; letter-spacing: 1px; color: #e2e8f0; margin: 6px 0 14px; }
+    .clock { font-variant-numeric: tabular-nums; font-size: 1.1rem; color: #cbd5e1; }
+    .since { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem; color: #64748b; }
+    .remove {
+      position: absolute; top: 10px; right: 12px;
+      background: none; border: none; color: #64748b; font-size: 1.1rem; cursor: pointer;
+    }
+    .remove:hover { color: #f87171; }
+    form {
+      max-width: 960px; margin: 28px auto 0;
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    }
+    input, button.add {
+      padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06); color: #f8fafc; font-size: 0.95rem;
+    }
+    input[type="date"] { color-scheme: dark; }
+    button.add { background: #38bdf8; color: #0f172a; font-weight: 700; border: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Contador de Tempo</h1>
+    <p>Há quanto tempo cada coisa começou, atualizando ao vivo.</p>
+  </header>
+
+  <main class="grid" id="grid"></main>
+
+  <form id="form">
+    <input id="nome" type="text" placeholder="Nome (ex: Faculdade)" maxlength="30" required>
+    <input id="data" type="date" required>
+    <button class="add" type="submit">Adicionar contador</button>
+  </form>
+
+  <script>
+    const PADRAO = [{ nome: 'Muay Thai', inicio: '2025-02-01' }];
+    const CHAVE = 'contadores';
+
+    function carregar() {
+      try {
+        const salvo = JSON.parse(localStorage.getItem(CHAVE));
+        if (Array.isArray(salvo)) return salvo;
+      } catch (e) {}
+      return PADRAO;
+    }
+
+    function salvar() {
+      try { localStorage.setItem(CHAVE, JSON.stringify(contadores)); } catch (e) {}
+    }
+
+    let contadores = carregar();
+    const grid = document.getElementById('grid');
+
+    function dataLocal(iso) {
+      const [a, m, d] = iso.split('-').map(Number);
+      return new Date(a, m - 1, d);
+    }
+
+    function doisDigitos(n) { return String(n).padStart(2, '0'); }
+
+    function render() {
+      grid.innerHTML = '';
+      contadores.forEach((c, i) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <button class="remove" title="Remover" data-i="${i}">×</button>
+          <div class="badge"></div>
+          <div class="days">0</div>
+          <div class="unit">dias</div>
+          <div class="clock">00h 00m 00s</div>
+          <div class="since"></div>`;
+        card.querySelector('.badge').textContent = c.nome;
+        card.querySelector('.since').textContent =
+          'Início: ' + dataLocal(c.inicio).toLocaleDateString('pt-BR');
+        grid.appendChild(card);
+      });
+      atualizar();
+    }
+
+    function atualizar() {
+      const agora = new Date();
+      grid.querySelectorAll('.card').forEach((card, i) => {
+        let ms = Math.max(0, agora - dataLocal(contadores[i].inicio));
+        const dias = Math.floor(ms / 86400000); ms %= 86400000;
+        const h = Math.floor(ms / 3600000); ms %= 3600000;
+        const m = Math.floor(ms / 60000); ms %= 60000;
+        const s = Math.floor(ms / 1000);
+        card.querySelector('.days').textContent = dias.toLocaleString('pt-BR');
+        card.querySelector('.clock').textContent =
+          `${doisDigitos(h)}h ${doisDigitos(m)}m ${doisDigitos(s)}s`;
+      });
+    }
+
+    grid.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('remove')) return;
+      contadores.splice(Number(e.target.dataset.i), 1);
+      salvar();
+      render();
+    });
+
+    document.getElementById('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const nome = document.getElementById('nome').value.trim();
+      const inicio = document.getElementById('data').value;
+      if (!nome || !inicio) return;
+      contadores.push({ nome, inicio });
+      salvar();
+      render();
+      e.target.reset();
+    });
+
+    render();
+    setInterval(atualizar, 1000);
+  </script>
+</body>
+</html>
